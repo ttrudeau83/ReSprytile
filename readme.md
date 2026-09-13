@@ -26,8 +26,11 @@ use an older release for Blender 4.x. If you see anything misbehaving, please su
 
 ### Download:
 
-Download from [releases](https://github.com/ttrudeau83/ReSprytile/releases), then in Blender use
-*Edit > Preferences > Add-ons > Install from Disk* and pick the zip.
+Download **`ReSprytile-x.y.z.zip`** from the *Assets* of the latest [release](https://github.com/ttrudeau83/ReSprytile/releases),
+then in Blender use *Edit > Preferences > Add-ons > Install from Disk* and pick the zip.
+
+> **Don't use GitHub's "Source code (zip)" download.** It unpacks to a folder named `ReSprytile-x.y.z` instead of
+> `ReSprytile`, and the add-on won't work from a folder with a different name.
 Installing a new version over an old one takes effect right away, no restart needed.
 
 ### Getting Started:
