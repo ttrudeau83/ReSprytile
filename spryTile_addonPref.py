@@ -55,18 +55,13 @@ class SprytileAddonPreferences(bpy.types.AddonPreferences):
         default=True,
     )
 
-    def set_picker(self, value):
-        if "tile_picker_key" not in self.keys():
-            self["tile_picker_key"] = 1
-        if "tile_sel_move_key" not in self.keys():
-            self["tile_sel_move_key"] = 2
-        if value != self["tile_sel_move_key"]:
-            self["tile_picker_key"] = value
+    # Add-on preferences can't hold ID properties in Blender 5, so these are plain enums.
+    # The two keys must differ: changing one to the other's key moves the other to a free key.
+    modifier_keys = ('Alt', 'Ctrl', 'Shift')
 
-    def get_picker(self):
-        if "tile_picker_key" not in self.keys():
-            self["tile_picker_key"] = 1
-        return self["tile_picker_key"]
+    def update_picker(self, context):
+        if self.tile_sel_move_key == self.tile_picker_key:
+            self.tile_sel_move_key = next(k for k in self.modifier_keys if k != self.tile_picker_key)
 
     tile_picker_key: bpy.props.EnumProperty(
         items=[
@@ -77,22 +72,12 @@ class SprytileAddonPreferences(bpy.types.AddonPreferences):
         name="Tile Picker Key",
         description="Key for using the tile picker eyedropper",
         default='Alt',
-        set=set_picker,
-        get=get_picker
+        update=update_picker
     )
 
-    def set_sel_move(self, value):
-        if "tile_picker_key" not in self.keys():
-            self["tile_picker_key"] = 1
-        if "tile_sel_move_key" not in self.keys():
-            self["tile_sel_move_key"] = 2
-        if value != self["tile_picker_key"]:
-            self["tile_sel_move_key"] = value
-
-    def get_sel_move(self):
-        if "tile_sel_move_key" not in self.keys():
-            self["tile_sel_move_key"] = 1
-        return self["tile_sel_move_key"]
+    def update_sel_move(self, context):
+        if self.tile_picker_key == self.tile_sel_move_key:
+            self.tile_picker_key = next(k for k in self.modifier_keys if k != self.tile_sel_move_key)
 
     tile_sel_move_key: bpy.props.EnumProperty(
         items=[
@@ -103,8 +88,7 @@ class SprytileAddonPreferences(bpy.types.AddonPreferences):
         name="Tile Selection Move Key",
         description="Key for moving the tile selection",
         default='Ctrl',
-        set=set_sel_move,
-        get=get_sel_move
+        update=update_sel_move
     )
 
     # addon updater preferences

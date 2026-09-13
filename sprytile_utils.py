@@ -1,5 +1,4 @@
 import bpy
-import bgl
 import blf
 import bmesh
 import math
@@ -17,7 +16,15 @@ from datetime import datetime
 from os import path
 import sprytile_modal
 import sprytile_preview
-import addon_updater_ops
+
+
+def get_addon_updater_ops():
+    """The updater module as loaded by the add-on package. It uses relative imports,
+    so it can't be imported from here, where this module is loaded as a top-level module."""
+    for name, module in sys.modules.items():
+        if name.endswith(".addon_updater_ops"):
+            return module
+    return None
 
 
 def get_build_vertices(position, x_vector, y_vector, up_vector, right_vector):
@@ -449,9 +456,7 @@ def get_paint_settings(sprytile_data):
         for x in range(4, 8):  # All toggles on
             paint_settings += 1 << x
     if sprytile_data.paint_mode == 'PAINT':
-        if not "paint_align" in sprytile_data.keys():
-            sprytile_data["paint_align"] = 5
-        paint_settings += sprytile_data["paint_align"]
+        paint_settings += sprytile_data.get_paint_align_value()
         paint_settings += (1 if sprytile_data.paint_uv_snap else 0) << 7
         paint_settings += (1 if sprytile_data.paint_edge_snap else 0) << 6
         paint_settings += (1 if sprytile_data.paint_stretch_x else 0) << 5
@@ -478,7 +483,7 @@ def from_paint_settings(sprytile_data, paint_settings):
     if rot_value == 3:
         rot_radian = math.radians(90)
 
-    sprytile_data["paint_align"] = align_value
+    sprytile_data.set_paint_align_value(align_value)
     sprytile_data.mesh_rotate = rot_radian
     sprytile_data.uv_flip_x = (paint_settings & 1 << 9) > 0
     sprytile_data.uv_flip_y = (paint_settings & 1 << 8) > 0
@@ -622,6 +627,9 @@ class UTIL_OP_SprytileGridAdd(bpy.types.Operator):
         return self.invoke(context, None)
 
     def invoke(self, context, event):
+        # Nothing to add a grid to yet, so load a tileset instead of silently doing nothing
+        if len(context.scene.sprytile_mats) == 0 and event is not None:
+            return bpy.ops.sprytile.tileset_new('INVOKE_DEFAULT')
         self.add_new_grid(context)
         return {'FINISHED'}
 
@@ -2038,7 +2046,9 @@ class VIEW3D_PT_SprytileWorkflowPanel(bpy.types.Panel):
             return context.object.mode == 'EDIT'
 
     def draw(self, context):
-        addon_updater_ops.check_for_update_background()
+        updater_ops = get_addon_updater_ops()
+        if updater_ops is not None:
+            updater_ops.check_for_update_background()
 
         layout = self.layout
 

@@ -962,15 +962,15 @@ def register(bl_info):
     updater.private_token = None  # "tokenstring"
 
     # choose your own username, must match website (not needed for GitLab)
-    updater.user = "ionthedev"
+    updater.user = "ttrudeau83"
 
     # choose your own repository, must match git name
-    updater.repo = "resprytile"
+    updater.repo = "ReSprytile"
 
     # updater.addon = # define at top of module, MUST be done first
 
     # Website for manual addon download, optional but recommended to set
-    updater.website = "https://github.com/ionthedev/ReSprytile/"
+    updater.website = "https://github.com/ttrudeau83/ReSprytile/"
 
     # used to check/compare versions
     updater.current_version = bl_info["version"]
@@ -982,7 +982,7 @@ def register(bl_info):
 
     # Optional, consider turning off for production or allow as an option
     # This will print out additional debugging info to the console
-    updater.verbose = True  # make False for production default
+    updater.verbose = False  # make False for production default
 
     # Optional, customize where the addon updater processing subfolder is,
     # essentially a staging folder used by the updater on its own

@@ -83,6 +83,17 @@ class ToolPaint:
 
         # Recalculate the rotation normal
         face_up, face_right = sprytile_modal.VIEW3D_OP_SprytileModalTool.get_face_up_vector(context.object, context, face_index)
+        if face_up is None or face_right is None:
+            # Viewed at an angle, no face edge lines up with the view, and the scene grid vectors can lie
+            # flat against the face (squashing the tile to a sliver). Use the face edge closest to view up
+            # and build right from it and the face normal.
+            face_up, _ = sprytile_modal.VIEW3D_OP_SprytileModalTool.get_face_up_vector(
+                context.object, context, face_index, sensitivity=1.01)
+            if face_up is not None:
+                normal_matrix = context.object.matrix_world.inverted().transposed().to_3x3()
+                world_normal = (normal_matrix @ face.normal).normalized()
+                face_up = face_up.normalized()
+                face_right = face_up.cross(world_normal).normalized()
 
         if face_up is not None and face_right is not None:
             rotate_normal = face_right.cross(face_up)

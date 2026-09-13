@@ -2,13 +2,13 @@ bl_info = {
     "name": "ReSprytile",
     "author": "Jeiel Aranal | Maintained by IonTheDev, Taron686, nurjeff",
     # Final version number must be two numerals to support x.x.00
-    "version": (1, 0, 3),
-    "blender": (4, 1, 0),
+    "version": (1, 1, 0),
+    "blender": (5, 0, 0),
     "description": "A utility for creating tile based low spec scenes with paint/map editor tools",
     "location": "View3D > UI panel > ReSprytile",
     "wiki_url": "https://docs.sprytile.xyz/quick-start/",
-    "tracker_url": "https://github.com/ionthedev/ReSprytile/issues",
-    "updater_info": "https://github.com/ionthedev/ReSprytile",
+    "tracker_url": "https://github.com/ttrudeau83/ReSprytile/issues",
+    "updater_info": "https://github.com/ttrudeau83/ReSprytile",
     "category": "Paint"
 }
 
@@ -20,21 +20,20 @@ cmd_subfolder = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(i
 if cmd_subfolder not in sys.path:
     sys.path.insert(0, cmd_subfolder)
 
-locals_list = locals()
-if "bpy" in locals_list:
-    from importlib import reload
-    
-    reload(sprytile_gui)
-    reload(sprytile_modal)
-    reload(sprytile_panel)
-    reload(sprytile_utils)
-    reload(sprytile_uv)
-    reload(tool_build)
-    reload(tool_paint)
-    reload(tool_fill)
-else:
-    from . import sprytile_gui, sprytile_modal, sprytile_panel, sprytile_utils, sprytile_uv, spryTile_addonPref
-    from sprytile_tools import *
+# Most modules are imported as top-level modules (e.g. "sprytile_utils") because of the sys.path entry above,
+# and Blender neither purges nor reloads those when the add-on is reinstalled, re-enabled or reloaded.
+# Drop every cached module from this folder (except this package itself) so the files on disk are used.
+# On an in-place reload the package namespace still holds the old submodules, which "from . import x"
+# would reuse, so remove those names too.
+for _name, _mod in list(sys.modules.items()):
+    _file = getattr(_mod, "__file__", None)
+    if _name != __name__ and _file and os.path.realpath(_file).startswith(cmd_subfolder + os.sep):
+        del sys.modules[_name]
+        if _name.startswith(__name__ + "."):
+            globals().pop(_name[len(__name__) + 1:].split(".")[0], None)
+
+from . import sprytile_gui, sprytile_modal, sprytile_panel, sprytile_utils, sprytile_uv, spryTile_addonPref
+from sprytile_tools import *
 
 import bpy
 import bpy.utils.previews
@@ -46,17 +45,17 @@ import rna_keymap_ui
 
 
 class SprytileSceneSettings(bpy.types.PropertyGroup):
+    # Since Blender 5.0, self["name"] no longer reads or writes properties declared with bpy.props,
+    # so declared properties (lock_normal, work_layer, paint_align, grid) are accessed as attributes.
+    # self["name"] is only used as private storage for properties that have their own get/set.
     def set_normal(self, value):
-        if "lock_normal" not in self.keys():
-            self["lock_normal"] = False
-
-        if self["lock_normal"] is True:
+        if self.lock_normal:
             return
-        if self["normal_mode"] == value:
-            self["lock_normal"] = not self["lock_normal"]
+        if self.get_normal() == value:
+            self.lock_normal = not self.lock_normal
             return
         self["normal_mode"] = value
-        self["lock_normal"] = True
+        self.lock_normal = True
         
         try:
             bpy.ops.sprytile.axis_update('INVOKE_REGION_WIN')
@@ -65,9 +64,8 @@ class SprytileSceneSettings(bpy.types.PropertyGroup):
         
 
     def get_normal(self):
-        if "normal_mode" not in self.keys():
-            self["normal_mode"] = 3
-        return self["normal_mode"]
+        # Getters can't write to ID data while the UI draws, so return defaults without storing them
+        return self.get("normal_mode", 3)
 
     normal_mode : EnumProperty(
         items=[
@@ -116,11 +114,9 @@ class SprytileSceneSettings(bpy.types.PropertyGroup):
         default='BASE'
     )
 
-    def set_layer(self, value):
-        keys = self.keys()
-        if "work_layer" not in keys:
-            self["work_layer"] = 1
+    work_layer_ids = ('BASE', 'DECAL_1')
 
+    def set_layer(self, value):
         current_value = self.get_layer()
         value = list(value)
         for idx in range(len(value)):
@@ -129,18 +125,12 @@ class SprytileSceneSettings(bpy.types.PropertyGroup):
 
         for idx in range(len(value)):
             if value[idx]:
-                self["work_layer"] = (idx + 1)
+                self.work_layer = self.work_layer_ids[idx]
                 break
 
     def get_layer(self):
-        keys = self.keys()
-        if "work_layer" not in keys:
-            self["work_layer"] = 1
-
         out_value = [False, False]
-        index_value_lookup = 1, 2
-        set_idx = index_value_lookup.index(self["work_layer"])
-        out_value[set_idx] = True
+        out_value[self.work_layer_ids.index(self.work_layer)] = True
         return out_value
 
     set_work_layer : BoolVectorProperty(
@@ -268,7 +258,17 @@ class SprytileSceneSettings(bpy.types.PropertyGroup):
             col_val = 3
         else:
             return
-        self["paint_align"] = row_val + col_val
+        self.set_paint_align_value(row_val + col_val)
+
+    def get_paint_align_value(self):
+        """Numeric value (1-9) of the paint_align enum"""
+        return self.bl_rna.properties['paint_align'].enum_items[self.paint_align].value
+
+    def set_paint_align_value(self, align_value):
+        for item in self.bl_rna.properties['paint_align'].enum_items:
+            if item.value == align_value:
+                self.paint_align = item.identifier
+                return
 
     def set_align_top(self, value):
         self.set_align_toggle(value, "top")
@@ -280,9 +280,7 @@ class SprytileSceneSettings(bpy.types.PropertyGroup):
         self.set_align_toggle(value, "bottom")
 
     def get_align_toggle(self, row):
-        if "paint_align" not in self.keys():
-            self["paint_align"] = 5
-        align = self["paint_align"]
+        align = self.get_paint_align_value()
         if row == 'top':
             return align == 1, align == 2, align == 3
         if row == 'middle':
@@ -323,13 +321,16 @@ class SprytileSceneSettings(bpy.types.PropertyGroup):
         name="Hinting",
         description="Selected edge is used as X axis for UV mapping."
     )
+    # Stretch on by default: painting a face fits exactly the picked tile onto it
     paint_stretch_x : BoolProperty(
         name="Stretch X",
-        description="Stretch face over X axis of tile"
+        description="Stretch face over X axis of tile",
+        default=True
     )
     paint_stretch_y : BoolProperty(
         name="Stretch Y",
-        description="Stretch face over Y axis of tile"
+        description="Stretch face over Y axis of tile",
+        default=True
     )
     paint_edge_snap : BoolProperty(
         name="Snap To Edge",
@@ -404,9 +405,7 @@ class SprytileSceneSettings(bpy.types.PropertyGroup):
             bpy.ops.sprytile.reload_auto('INVOKE_REGION_WIN')
 
     def get_reload(self):
-        if "auto_reload" not in self.keys():
-            self["auto_reload"] = False
-        return self["auto_reload"]
+        return self.get("auto_reload", False)
 
     auto_reload: bpy.props.BoolProperty(
         name="Auto",
@@ -490,22 +489,15 @@ class SprytileMaterialGridSettings(bpy.types.PropertyGroup):
 
     def set_padding(self, value):
         current_padding = self.get_padding()
-        if "grid" not in self.keys():
-            self["grid"] = (32, 32)
         padding_delta = [ (value[0] - current_padding[0]) * 2, (value[1] - current_padding[1]) * 2]
-        new_grid = [self["grid"][0] - padding_delta[0], self["grid"][1] - padding_delta[1]]
+        new_grid = [self.grid[0] - padding_delta[0], self.grid[1] - padding_delta[1]]
         if new_grid[0] < 1 or new_grid[1] < 1:
             return
-        self["grid"] = (new_grid[0], new_grid[1])
+        self.grid = (new_grid[0], new_grid[1])
         self["padding"] = value
 
     def get_padding(self):
-        if "padding" not in self.keys():
-            try:
-                self["padding"] = (0, 0)
-            except:
-                return (0, 0)
-        return self["padding"]
+        return tuple(self.get("padding", (0, 0)))
 
     padding : IntVectorProperty(
         name="Padding",
@@ -566,8 +558,7 @@ class SprytileMaterialData(bpy.types.PropertyGroup):
             self['is_expanded'] = True
 
     def get_expanded(self):
-        self.expanded_default()
-        return self['is_expanded']
+        return self.get('is_expanded', True)
 
     def set_expanded(self, value):
         self.expanded_default()
@@ -636,9 +627,7 @@ class SprytileGridDisplay(bpy.types.PropertyGroup):
 
 class SprytileGridList(bpy.types.PropertyGroup):
     def get_idx(self):
-        if "idx" not in self.keys():
-            self["idx"] = 0
-        return self["idx"]
+        return self.get("idx", 0)
 
     def set_idx(self, value):
         # If the selected index is a material entry
@@ -681,10 +670,7 @@ class PROP_OP_SprytilePropsSetup(bpy.types.Operator):
 
         bpy.types.Scene.sprytile_list = bpy.props.PointerProperty(type=SprytileGridList)
 
-        if sprytile_gui.system_info['is_apple_silicon']:
-            bpy.types.Scene.sprytile_ui = bpy.props.PointerProperty(type=sprytile_gui.spryTile_OS_Apple.SprytileGuiData)
-        else:
-            bpy.types.Scene.sprytile_ui = bpy.props.PointerProperty(type=sprytile_gui.spryTile_OS_EverythingElse.SprytileGuiData)
+        bpy.types.Scene.sprytile_ui = bpy.props.PointerProperty(type=sprytile_gui.spryTile_OS_EverythingElse.SprytileGuiData)
 
         bpy.types.Object.sprytile_gridid = IntProperty(
             name="Grid ID",

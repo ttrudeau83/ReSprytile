@@ -1,36 +1,9 @@
-import platform
 import bpy
 
-# Defines system architechture
-def detect_system():
-    system_info = {
-        'is_apple_silicon': False,
-        'is_windows_32bit': False,
-        'is_windows_64bit': False
-    }
-    OSTypes = {'windowspe','windows'}    
-    machine = platform.machine()
-    architecture, OSName = platform.architecture()
-
-    if machine == 'arm64':
-        system_info['is_apple_silicon'] = True
-    elif architecture == '32bit' and OSName.lower() in OSTypes:
-        system_info['is_windows_32bit'] = True
-    elif architecture == '64bit' and OSName.lower() in OSTypes:
-        system_info['is_windows_64bit'] = True
-    
-    return system_info
-
-system_info = detect_system()
-
-if system_info['is_apple_silicon']:
-    import spryTile_OS_Apple
-    classes = (spryTile_OS_Apple)
-
-else:
-    print("Unknown system architecture.")
-    import spryTile_OS_EverythingElse
-    classes = (spryTile_OS_EverythingElse)
+# The GUI uses the gpu module and works on every platform. (The old Apple Silicon
+# variant relied on the bgl module, which was removed in Blender 5.0.)
+import spryTile_OS_EverythingElse
+classes = (spryTile_OS_EverythingElse)
 
 classe = classes
 def register():
